@@ -1,20 +1,25 @@
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import String, Boolean, ForeignKey, Text, DateTime, UniqueConstraint
+from sqlalchemy import String, Boolean, ForeignKey, Text, DateTime, UniqueConstraint, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import func
 from datetime import datetime
 
 db = SQLAlchemy()
 
+# USERS
 
-class User(db.Model):
-    __tablename__ = "user"
+
+class Users(db.Model):
+    __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(
         String(120), unique=True, nullable=False)
-    password: Mapped[str] = mapped_column(String(10), nullable=False)
+    password: Mapped[str] = mapped_column(
+        String(255), nullable=False)  # FIX seguridad
     is_active: Mapped[bool] = mapped_column(Boolean(), default=True)
 
+    # Relaciones
     posts = relationship("Post", back_populates="user",
                          cascade="all, delete-orphan")
     comments = relationship(
@@ -45,6 +50,7 @@ class User(db.Model):
         }
 
 
+# POST
 class Post(db.Model):
     __tablename__ = "post"
 
@@ -52,11 +58,13 @@ class Post(db.Model):
     image_url: Mapped[str] = mapped_column(String(255), nullable=False)
     caption: Mapped[str] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow)
+        DateTime, server_default=func.now())
 
-    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=False, index=True)
 
-    user = relationship("User", back_populates="posts")
+    # Relaciones
+    user = relationship("Users", back_populates="posts")
     comments = relationship(
         "Comment", back_populates="post", cascade="all, delete-orphan")
     likes = relationship("Like", back_populates="post",
@@ -67,47 +75,57 @@ class Post(db.Model):
             "id": self.id,
             "image_url": self.image_url,
             "caption": self.caption,
-            "created_at": self.created_at.isoformat(),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
             "user_id": self.user_id
         }
 
 
+# COMMENT
 class Comment(db.Model):
     __tablename__ = "comment"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow)
+        DateTime, server_default=func.now())
 
-    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
-    post_id: Mapped[int] = mapped_column(ForeignKey("post.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=False, index=True)
+    post_id: Mapped[int] = mapped_column(
+        ForeignKey("post.id"), nullable=False, index=True)
 
-    user = relationship("User", back_populates="comments")
+    # Relaciones
+    user = relationship("Users", back_populates="comments")
     post = relationship("Post", back_populates="comments")
 
     def serialize(self):
         return {
             "id": self.id,
             "content": self.content,
-            "created_at": self.created_at.isoformat(),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
             "user_id": self.user_id,
             "post_id": self.post_id
         }
 
 
-class Likes(db.Model):
-    __tablename__ = "likes"
+# LIKE
+class Like(db.Model):
+    __tablename__ = "like"
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
-    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
-    post_id: Mapped[int] = mapped_column(ForeignKey("post.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=False, index=True)
+    post_id: Mapped[int] = mapped_column(
+        ForeignKey("post.id"), nullable=False, index=True)
 
-    __table_args__ = (UniqueConstraint(
-        "user_id", "post_id", name="unique_like"),)
+    # Evita likes duplicados
+    __table_args__ = (
+        UniqueConstraint("user_id", "post_id", name="unique_like"),
+    )
 
-    user = relationship("User", back_populates="likes")
+    # Relaciones
+    user = relationship("Users", back_populates="likes")
     post = relationship("Post", back_populates="likes")
 
     def serialize(self):
@@ -118,27 +136,30 @@ class Likes(db.Model):
         }
 
 
+# FOLLOWER
 class Follower(db.Model):
     __tablename__ = "follower"
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
     follower_id: Mapped[int] = mapped_column(
-        ForeignKey("user.id"), nullable=False)
+        ForeignKey("users.id"), nullable=False, index=True)
     following_id: Mapped[int] = mapped_column(
-        ForeignKey("user.id"), nullable=False)
+        ForeignKey("users.id"), nullable=False, index=True)
 
-    __table_args__ = (UniqueConstraint(
-        "follower_id", "following_id", name="unique_follow"),)
+    __table_args__ = (
+        UniqueConstraint("follower_id", "following_id", name="unique_follow"),
+        CheckConstraint("follower_id != following_id", name="no_self_follow"),
+    )
 
     follower = relationship(
-        "User",
+        "Users",
         foreign_keys=[follower_id],
         back_populates="following"
     )
 
     following = relationship(
-        "User",
+        "Users",
         foreign_keys=[following_id],
         back_populates="followers"
     )
@@ -157,7 +178,7 @@ class Follower(db.Model):
 
 # db = SQLAlchemy()
 
-# class User(db.Model):
+# class users(db.Model):
 #     id: Mapped[int] = mapped_column(primary_key=True)
 #     email: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
 #     password: Mapped[str] = mapped_column(nullable=False)
