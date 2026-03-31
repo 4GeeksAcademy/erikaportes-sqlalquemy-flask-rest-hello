@@ -15,7 +15,6 @@ class User(db.Model):
     password: Mapped[str] = mapped_column(String(10), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean(), default=True)
 
-    # Relaciones
     posts = relationship("Post", back_populates="user",
                          cascade="all, delete-orphan")
     comments = relationship(
@@ -57,7 +56,6 @@ class Post(db.Model):
 
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
 
-    # Relaciones
     user = relationship("User", back_populates="posts")
     comments = relationship(
         "Comment", back_populates="post", cascade="all, delete-orphan")
@@ -85,7 +83,6 @@ class Comment(db.Model):
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     post_id: Mapped[int] = mapped_column(ForeignKey("post.id"), nullable=False)
 
-    # Relaciones
     user = relationship("User", back_populates="comments")
     post = relationship("Post", back_populates="comments")
 
@@ -107,11 +104,9 @@ class Likes(db.Model):
     user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     post_id: Mapped[int] = mapped_column(ForeignKey("post.id"), nullable=False)
 
-    # Evita likes duplicados
     __table_args__ = (UniqueConstraint(
         "user_id", "post_id", name="unique_like"),)
 
-    # Relaciones
     user = relationship("User", back_populates="likes")
     post = relationship("Post", back_populates="likes")
 
@@ -133,11 +128,9 @@ class Follower(db.Model):
     following_id: Mapped[int] = mapped_column(
         ForeignKey("user.id"), nullable=False)
 
-    # Evita duplicados
     __table_args__ = (UniqueConstraint(
         "follower_id", "following_id", name="unique_follow"),)
 
-    # Relaciones
     follower = relationship(
         "User",
         foreign_keys=[follower_id],
